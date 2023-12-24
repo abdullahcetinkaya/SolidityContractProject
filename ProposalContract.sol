@@ -3,8 +3,11 @@ pragma solidity ^0.8.18;
 
 
 contract ProposalContract {
+
     uint256 private counter; // This line is added
     address owner;
+    address[]  private voted_addresses;
+
     struct Proposal {
         string description; // Description of the proposal
         uint256 approve; // Number of approve votes
@@ -22,11 +25,22 @@ contract ProposalContract {
 
     constructor() {
         owner = msg.sender;
+        voted_addresses.push(msg.sender);
     }
 
 
     modifier onlyOwner() {
         require(msg.sender == owner);
+        _;
+    }
+
+    modifier active() {
+        require(proposal_history[counter].is_active == true, "The proposal is not active");
+        _;
+    }
+
+     modifier newVoter(address _address) {
+        require(!isVoted(_address), "Address has already voted");
         _;
     }
 
@@ -40,6 +54,68 @@ contract ProposalContract {
     }
 
 
+    function vote(uint8 choice) external {
+        // First part
+        Proposal storage proposal = proposal_history[counter];
+        uint256 total_vote = proposal.approve + proposal.reject + proposal.pass;
+
+        // Second part
+        if (choice == 1) {
+            proposal.approve += 1;
+            proposal.current_state = calculateCurrentState();
+        } else if (choice == 2) {
+            proposal.reject += 1;
+            proposal.current_state = calculateCurrentState();
+        } else if (choice == 0) {
+            proposal.pass += 1;
+            proposal.current_state = calculateCurrentState();
+        }
+
+        // Third part
+        if ((proposal.total_vote_to_end - total_vote == 1) && (choice == 1 || choice == 2 || choice == 0)) {
+            proposal.is_active = false;
+            voted_addresses = [owner];
+        }
+    }
+
+
+
+    function calculateCurrentState() private view returns(bool) {
+        Proposal storage proposal = proposal_history[counter];
+
+        uint256 approve = proposal.approve;
+        uint256 reject = proposal.reject;
+        uint256 pass = proposal.pass;
+            
+        if (proposal.pass %2 == 1) {
+            pass += 1;
+        }
+
+        pass = pass / 2;
+
+        if (approve > 2 * (reject + pass)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function isVoted(address _address) public view returns (bool) {
+        for (uint i = 0; i < voted_addresses.length; i++) {
+            if (voted_addresses[i] == _address) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getCurrentProposal() external view returns(Proposal memory) {
+        return proposal_history[counter];
+    }
+
+    function getProposal(uint256 number) external view returns(Proposal memory) {
+        return proposal_history[number];
+    }
 
 
 }
